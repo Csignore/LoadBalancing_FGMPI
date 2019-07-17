@@ -29,7 +29,6 @@ int who_are_my_magNeighb(int rank, int osProcNum, int osProcSize, int *prevmag_p
 #include "fgmpi.h"
 /* forward declarations */
 FG_MapPtr_t map_lookup(int argc, char** argv, char* str);
-FG_ProcessPtr_t random_mapper(int argc, char** argv, int rank);
 FG_ProcessPtr_t binding_func(int argc, char** argv, int rank);
 
 int main( int argc, char *argv[] )
@@ -45,8 +44,7 @@ FG_MapPtr_t map_lookup(int argc, char** argv, char* str)
 }
 
 FG_ProcessPtr_t binding_func(int argc, char** argv, int rank)
-{
-    if ( (rank == MAP_INIT_ACTION) || (rank == MAP_FINALIZE_ACTION) ){
+{   if ( (rank == MAP_INIT_ACTION) || (rank == MAP_FINALIZE_ACTION) ){
         return (NULL);
     }
 
@@ -61,7 +59,11 @@ int FG_Process(int argc, char **argv){
     MPIX_Get_collocated_size(&osProcSize);
     MPIX_Get_n_size(&osProcNum);
     MPIX_Get_collocated_startrank(&startRank);
-    proc_color = rank / osProcSize;
+    if (osProcSize < 2 || osProcNum < 2) {
+    	printf("Need to create more than one OS-Processes and more than one concurrent processes.\n");
+    	exit(1);
+    }
+    proc_color = startRank;
     mag_color =  (rank == startRank) ? 1 : 0;
     MPI_Comm proc_comm, mag_comm;
     MPI_Comm_split(MPI_COMM_WORLD, proc_color, rank, &proc_comm);
@@ -132,7 +134,7 @@ int FG_Process(int argc, char **argv){
 			        	MPI_Request tempReq;
 			        	MPI_Isend(&replyreqbuf, 1, MPI_INT, status.MPI_SOURCE, WORK_TAG, proc_comm, &tempReq);
 		        	} else{
-		        		printf("The worker %d is helping the other proc_comm doing work No. %d.\n", status.MPI_SOURCE, replyreqbuf);
+		        		printf("The worker %d is helping the other proc_comm doing work No. %d.\n", status.MPI_SOURCE+startRank, replyreqbuf);
 		        		MPI_Send(&replyreqbuf, 1, MPI_INT, status.MPI_SOURCE, WORK_TAG, proc_comm);
 		        	}
 	        	} else{
