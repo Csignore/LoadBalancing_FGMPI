@@ -147,6 +147,14 @@ int FG_Process(int argc, char **argv){
 	        		printf("requesting the work since rank %d is out\n", rank);
 
 
+	        		// Case  when all the processes happend to finish at the same time
+					int temphelpReqRes=FALSE; MPI_Status temphelpStatus;
+		        	MPI_Test(&helprequest,&temphelpReqRes,&temphelpStatus);
+	            	if ( temphelpReqRes == TRUE) {
+	            		replyreqbuf = -1;
+		        		printf("this case is when all the processes happend to finish at the same time\n");
+		        		MPI_Send(&replyreqbuf, 1, MPI_INT, prevmag, HELPREP_TAG, mag_comm);
+		        	}
 	
 		        	MPI_Status tempSta;
 		        	MPI_Recv(&replyreqbuf, 1, MPI_INT, nextmag, HELPREP_TAG, mag_comm, &tempSta);
