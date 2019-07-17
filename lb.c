@@ -3,21 +3,26 @@
 #include <mpi.h>
 
 
-#define MAXINT 9
+#define MAXINT 229
 #define FALSE 0
 #define TRUE !FALSE
 #define WORKREQ_TAG 999
 #define WORK_TAG 888
 #define STOP_TAG 444
+#define END_TAG 443
+
+#define HELP_TAG 333
+
 
 
 /* forward declarations */
 int FG_Process(int argc, char **argv);
 int do_some_work(int times);
-int noticeMyworkers(int osProcSize, int startRank, MPI_Comm proc_comm);
-int getNoticefromworkers(int osProcSize, int startRank, MPI_Comm proc_comm);
+int noticeMyworkers(int osProcSize, MPI_Comm proc_comm);
+int getNoticefromworkers(int osProcSize, MPI_Comm proc_comm);
 int noticeMyManager(MPI_Comm proc_comm);
-int finishSendfromworkers(int osProcSize, int startRank, MPI_Comm proc_comm,int noticeWorker);
+int finishSendfromworkers(int osProcSize, MPI_Comm proc_comm,int noticeWorker);
+int who_are_my_magNeighb(int rank, int osProcNum, int osProcSize, int *prevmag_ptr, int *nextmag_ptr);
 
 /******* FG-MPI Boilerplate begin *********/
 #include "fgmpi.h"
@@ -91,22 +96,35 @@ int FG_Process(int argc, char **argv){
     }
 
     if (mag_color) {
-    	MPI_Request request;
     	
     	// this is the case for manager processes;
 		uint32_t replyreqbuf = 0;
 		uint32_t reqbuf = 0;
 	    int notdoneSign = TRUE;
-	    /* Set up a MPI_Irecv to stop the procComm */
+
+	    // for managers communication
+	    MPI_Request helprequest;
+    	int prevmag, nextmag;
+        who_are_my_magNeighb(rank, osProcNum, osProcSize, &prevmag, &nextmag);
+        int helpComing = TRUE;
+	    MPI_Irecv(&helpComing,1,MPI_INT,prevmag,HELP_TAG,mag_comm,&helprequest);
+    	
+
     	while (notdoneSign){
 	    	MPI_Status status;
 			MPI_Recv(&reqbuf, 1, MPI_INT, MPI_ANY_SOURCE, WORKREQ_TAG, proc_comm, &status);
 	        printf("the manager has received request from worker %d, value is %d.\n",status.MPI_SOURCE, reqbuf);
 	        if (reqbuf == -1) {
 	        	// communicate with other managers
+	        	
+	        	//MPI_Send(&helpComing, 1, MPI_INT, nextmag, HELP_TAG, mag_comm);
 
+
+
+
+	        	noticeMyworkers(osProcSize, proc_comm);
 	        	printf("hi something happened\n");
-				finishSendfromworkers(osProcSize, startRank, proc_comm, status.MPI_SOURCE);
+				finishSendfromworkers(osProcSize, proc_comm, status.MPI_SOURCE);
 	        	printf("hi something asdkajdkajdhcka\n");
 	        	notdoneSign = FALSE;
 
@@ -117,9 +135,9 @@ int FG_Process(int argc, char **argv){
 				printf("the manager has sent the replyreqbuf as value %d to worker %d \n", replyreqbuf, status.MPI_SOURCE);	
 	        }
 	    }
-	    noticeMyworkers(osProcSize, startRank, proc_comm);
+	    //noticeMyworkers(osProcSize, proc_comm);
 	    
-    	getNoticefromworkers(osProcSize, startRank, proc_comm);
+    	getNoticefromworkers(osProcSize, proc_comm);
 
 
     } else {
@@ -127,7 +145,7 @@ int FG_Process(int argc, char **argv){
     	MPI_Status status;
 	    int reqbuf = 0;
 	    int notdoneSign = TRUE; MPI_Request request;
-
+printf("alidkjlakjdskjcapoidjmcpaodsmpocampdocap\n");
 	    MPI_Irecv(&notdoneSign,1,MPI_INT,0,STOP_TAG,proc_comm,&request);
 	    
     	while (notdoneSign) {
@@ -147,10 +165,15 @@ int FG_Process(int argc, char **argv){
 	        printf("%d is sleeping the %dth times\n", rank, reqbuf);
 
     	}
+    	printf("%d has reached a point to notice manager\n", rank);
     	noticeMyManager(proc_comm);
 
     }
     printf("%d is done ==================================\n", rank);
+
+    MPI_Barrier(MPI_COMM_WORLD);
+    MPI_Comm_free(&proc_comm);
+    MPI_Comm_free(&mag_comm);
 
     MPI_Finalize();
     return 0;
@@ -165,35 +188,58 @@ int do_some_work(int times)
 		return -1;
 }
 
-int finishSendfromworkers(int osProcSize, int startRank, MPI_Comm proc_comm, int noticeWorker){
+int finishSendfromworkers(int osProcSize, MPI_Comm proc_comm, int noticeWorker){
 	int i, info;
-	MPI_Status status;
+	//MPI_Status status;
+	printf("the manager is ready to finish all his biz \n");
 	for (i = 1; i < osProcSize; i++){
+		printf("the manager is about to receive last workreq sign from worker %d \n", i);
 		if (i == noticeWorker) continue;
-		MPI_Recv(&info, 1, MPI_INT, i, WORKREQ_TAG, proc_comm,&status);
+		MPI_Request tempReq;
+		MPI_Irecv(&info, 1, MPI_INT, i, WORKREQ_TAG, proc_comm, &tempReq);
 		printf("the manager has received last workreq sign from worker %d\n", i);
 	}
+	return 0;
 }
 
-int noticeMyworkers(int osProcSize, int startRank, MPI_Comm proc_comm){
+int noticeMyworkers(int osProcSize, MPI_Comm proc_comm){
 	int i, info = FALSE;
 	for (i = 1; i < osProcSize; i++){
 		MPI_Send(&info, 1, MPI_INT, i, STOP_TAG, proc_comm);
 		printf("the manager has sent stop sign to worker %d\n", i);
 	}
+	return 0;
 }
 
-int getNoticefromworkers(int osProcSize, int startRank, MPI_Comm proc_comm){
+int getNoticefromworkers(int osProcSize, MPI_Comm proc_comm){
 	int i, info;
 	MPI_Status status;
 	for (i = 1; i < osProcSize; i++){
-		MPI_Recv(&info, 1, MPI_INT, i, STOP_TAG, proc_comm,&status);
+		printf("the manageer is about to received from the worker %d \n", i);
+		MPI_Recv(&info, 1, MPI_INT, i, END_TAG, proc_comm,&status);
 		printf("the manager has received end sign from worker %d\n", i);
 	}
+	return 0;
 }
 
 int noticeMyManager(MPI_Comm proc_comm){
 	int info = TRUE;
-	MPI_Send(&info, 1, MPI_INT, 0, STOP_TAG, proc_comm);
+printf("the worker is sending the stop sign to manager \n");
+	MPI_Send(&info, 1, MPI_INT, 0, END_TAG, proc_comm);
+	printf("the worker has sent end sign to manager \n");
+	return 0;
+}
+
+int who_are_my_magNeighb(int rank, int osProcNum, int osProcSize, int *prevmag_ptr, int *nextmag_ptr)
+{
+    int prevmag = -1, nextmag = -1;
+
+ 	int procOrder = rank / osProcSize;
+    prevmag = (0 ==rank) ? (osProcNum-1) : procOrder-1;
+    nextmag = ((osProcNum-1)*osProcSize ==rank) ? 0 : procOrder+1;
+
+    *prevmag_ptr = prevmag;
+    *nextmag_ptr = nextmag;
+    return (0);
 }
 
