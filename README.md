@@ -20,12 +20,14 @@ The manager process is in charge of assigning task to every workers that belong 
 ## Build and Run
 This project is based on an open source MPI library: [FGMPI](https://www.cs.ubc.ca/~humaira/fgmpi.html). Follow instruction [here](https://www.cs.ubc.ca/~humaira/docs/fgmpi_userguide.pdf) to build the environment.
 
-**Command**
+**Running Command**
 
 ```
 mpiexec -nfg %d -n %d ./lb  
 ```
 
-FG-MPI uses a packed assignment, for example ```
-mpiexec -nfg 10 -n 10 ./lb  ``` use creates 10 processes assigned as [0..9] [10..19] ... [80..89] [90..99].  The use above has 0, 10, 20 ... 80, 90 as the managers so that the rest of processes are workers for respective manager.
+FG-MPI uses a packed assignment, the first input is the number of concurrent processes created in one OS-process; the seconde input is the number of OS-processes created in the program.
+
+For example, command ```
+mpiexec -nfg 10 -n 10 ./lb  ``` creates 10 OS-processes, and each OS-process has 10 concurrent processes. The concurrent processes in the OS-process are assigned a process number as the range of [0..9] [10..19] ... [80..89] [90..99].  The use above has 0, 10, 20 ... 80, 90 as the managers so that the rest of processes are workers for the respective manager.
 
